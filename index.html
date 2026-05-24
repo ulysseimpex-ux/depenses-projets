@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dépenses projets</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Mono', 'Courier New', monospace; background: #0f1117; color: #e8e8e8; min-height: 100vh; padding: 24px 20px; }
+  .root { max-width: 720px; margin: 0 auto; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+  .header-title { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+  .header-sub { font-size: 12px; color: #555; margin-top: 2px; }
+  .header-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-add { background: #3effa0; color: #0f1117; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .btn-invoice { background: transparent; color: #3effa0; border: 1px solid #3effa0; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-invoice:disabled { opacity: 0.5; cursor: default; }
+  .totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .total-card { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 10px; padding: 12px 14px; }
+  .total-card.grand { background: #1a2a1f; border-color: #2a4a35; }
+  .total-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .total-amount { font-size: 18px; font-weight: 700; color: #fff; }
+  .total-card.grand .total-amount { color: #c8f0e0; }
+  .form-card { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.8px; }
+  .form-input { background: #0f1117; border: 1px solid #2a2d3a; border-radius: 6px; padding: 8px 10px; color: #e8e8e8; font-size: 13px; font-family: inherit; outline: none; width: 100%; }
+  .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .btn-cancel { background: transparent; border: 1px solid #2a2d3a; border-radius: 6px; padding: 8px 14px; color: #888; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .btn-submit { background: #3effa0; border: none; border-radius: 6px; padding: 8px 16px; color: #0f1117; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .filters { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+  .filter-select { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 6px; padding: 6px 10px; color: #aaa; font-size: 12px; font-family: inherit; outline: none; }
+  .filter-count { font-size: 12px; color: #444; margin-left: auto; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .item { display: flex; align-items: center; gap: 12px; background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 10px; padding: 12px 14px; }
+  .item-icon { font-size: 20px; flex-shrink: 0; }
+  .item-main { flex: 1; min-width: 0; }
+  .item-desc { font-size: 14px; color: #e8e8e8; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .item-meta { font-size: 11px; color: #555; margin-top: 2px; }
+  .recurring-badge { font-size: 11px; color: #3effa0; background: #1a2a1f; border: 1px solid #2a4a35; border-radius: 4px; padding: 1px 5px; }
+  .item-amount { font-size: 16px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .btn-icon { background: transparent; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; }
+  .empty { text-align: center; padding: 60px 20px; color: #444; }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-text { font-size: 16px; color: #555; margin-bottom: 4px; }
+  .empty-sub { font-size: 13px; color: #333; }
+  .banner { border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; }
+  .banner-error { background: #2a1a1a; border: 1px solid #5a2a2a; color: #ff8080; }
+  .banner-info { background: #1a2a1f; border: 1px solid #2a4a35; color: #3effa0; }
+  .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #aaa; margin-top: 8px; }
+  .analyzing-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .analyzing-box { background: #1a1d27; border: 1px solid #3effa0; border-radius: 12px; padding: 24px 32px; text-align: center; color: #3effa0; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="root">
+  <div class="header">
+    <div>
+      <div class="header-title">Dépenses projets</div>
+      <div class="header-sub" id="headerSub">0 entrée</div>
+    </div>
+    <div class="header-btns">
+      <input type="file" id="fileInput" accept="image/*" style="display:none">
+      <button class="btn-invoice" id="btnInvoice" onclick="document.getElementById('fileInput').click()">📄 Importer facture</button>
+      <button class="btn-add" id="btnAdd" onclick="toggleForm()">+ Ajouter</button>
+    </div>
+  </div>
+
+  <div id="errorBanner" class="banner banner-error" style="display:none"></div>
+  <div id="infoBanner" class="banner banner-info" style="display:none"></div>
+
+  <div class="totals" id="totals"></div>
+
+  <div class="form-card" id="formCard" style="display:none">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="fDate">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Projet</label>
+        <select class="form-input" id="fProject">
+          <option>Léa</option><option>Autre projet</option><option>Général</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Catégorie</label>
+        <select class="form-input" id="fCategory">
+          <option value="hosting">⚡ Hébergement</option>
+          <option value="domain">🌐 Nom de domaine</option>
+          <option value="tools">🔧 Outils & SaaS</option>
+          <option value="api">🤖 APIs & IA</option>
+          <option value="design">🎨 Design & Assets</option>
+          <option value="dev">💻 Développement</option>
+          <option value="marketing">📢 Marketing</option>
+          <option value="other">📦 Autre</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Devise</label>
+        <select class="form-input" id="fCurrency">
+          <option>EUR</option><option>GBP</option><option>USD</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Description</label>
+        <input class="form-input" type="text" id="fDesc" placeholder="Ex: Railway Pro, Resend, EAS Build…">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Montant</label>
+        <input class="form-input" type="number" id="fAmount" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="form-group" style="justify-content:flex-end">
+        <label class="checkbox-label">
+          <input type="checkbox" id="fRecurring"> Récurrent
+        </label>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="closeForm()">Annuler</button>
+      <button class="btn-submit" id="btnSubmit" onclick="submitForm()">Ajouter</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <select class="filter-select" id="filterProject" onchange="render()">
+      <option value="Tous">Tous les projets</option>
+      <option>Léa</option><option>Autre projet</option><option>Général</option>
+    </select>
+    <select class="filter-select" id="filterCat" onchange="render()">
+      <option value="Tous">Toutes catégories</option>
+      <option value="hosting">⚡ Hébergement</option>
+      <option value="domain">🌐 Nom de domaine</option>
+      <option value="tools">🔧 Outils & SaaS</option>
+      <option value="api">🤖 APIs & IA</option>
+      <option value="design">🎨 Design & Assets</option>
+      <option value="dev">💻 Développement</option>
+      <option value="marketing">📢 Marketing</option>
+      <option value="other">📦 Autre</option>
+    </select>
+    <div class="filter-count" id="filterCount"></div>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<div class="analyzing-overlay" id="overlay" style="display:none">
+  <div class="analyzing-box">⏳ Analyse de la facture en cours…</div>
+</div>
+
+<script>
+const CATS = {
+  hosting: { label: "Hébergement", icon: "⚡" },
+  domain: { label: "Nom de domaine", icon: "🌐" },
+  tools: { label: "Outils & SaaS", icon: "🔧" },
+  api: { label: "APIs & IA", icon: "🤖" },
+  design: { label: "Design & Assets", icon: "🎨" },
+  dev: { label: "Développement", icon: "💻" },
+  marketing: { label: "Marketing", icon: "📢" },
+  other: { label: "Autre", icon: "📦" },
+};
+const PROJECTS = ["Léa", "Autre projet", "Général"];
+const SYM = { EUR: "€", GBP: "£", USD: "$" };
+
+let expenses = JSON.parse(localStorage.getItem("depenses-v2") || "[]");
+let editId = null;
+
+function save() {
+  localStorage.setItem("depenses-v2", JSON.stringify(expenses));
+}
+
+function fmt(amount, cur) {
+  return `${SYM[cur] || cur}${parseFloat(amount).toFixed(2)}`;
+}
+
+function fmtDate(d) {
+  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function today() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function resetForm() {
+  document.getElementById("fDate").value = today();
+  document.getElementById("fProject").value = "Léa";
+  document.getElementById("fCategory").value = "hosting";
+  document.getElementById("fCurrency").value = "EUR";
+  document.getElementById("fDesc").value = "";
+  document.getElementById("fAmount").value = "";
+  document.getElementById("fRecurring").checked = false;
+  document.getElementById("btnSubmit").textContent = "Ajouter";
+  editId = null;
+}
+
+function toggleForm() {
+  const c = document.getElementById("formCard");
+  if (c.style.display === "none") {
+    resetForm();
+    c.style.display = "block";
+    document.getElementById("btnAdd").textContent = "✕";
+  } else {
+    closeForm();
+  }
+}
+
+function closeForm() {
+  document.getElementById("formCard").style.display = "none";
+  document.getElementById("btnAdd").textContent = "+ Ajouter";
+  editId = null;
+}
+
+function submitForm() {
+  const desc = document.getElementById("fDesc").value.trim();
+  const amount = parseFloat(document.getElementById("fAmount").value);
+  if (!desc || isNaN(amount)) return;
+  const entry = {
+    id: editId || Date.now(),
+    date: document.getElementById("fDate").value,
+    project: document.getElementById("fProject").value,
+    category: document.getElementById("fCategory").value,
+    currency: document.getElementById("fCurrency").value,
+    description: desc,
+    amount,
+    recurring: document.getElementById("fRecurring").checked,
+  };
+  if (editId) {
+    expenses = expenses.map(e => e.id === editId ? entry : e);
+  } else {
+    expenses.unshift(entry);
+  }
+  save();
+  closeForm();
+  render();
+}
+
+function editExpense(id) {
+  const e = expenses.find(x => x.id === id);
+  if (!e) return;
+  editId = id;
+  document.getElementById("fDate").value = e.date;
+  document.getElementById("fProject").value = e.project;
+  document.getElementById("fCategory").value = e.category;
+  document.getElementById("fCurrency").value = e.currency;
+  document.getElementById("fDesc").value = e.description;
+  document.getElementById("fAmount").value = e.amount;
+  document.getElementById("fRecurring").checked = e.recurring;
+  document.getElementById("btnSubmit").textContent = "Modifier";
+  document.getElementById("formCard").style.display = "block";
+  document.getElementById("btnAdd").textContent = "✕";
+  window.scrollTo(0, 0);
+}
+
+function deleteExpense(id) {
+  if (!confirm("Supprimer cette dépense ?")) return;
+  expenses = expenses.filter(e => e.id !== id);
+  save();
+  render();
+}
+
+function render() {
+  const fp = document.getElementById("filterProject").value;
+  const fc = document.getElementById("filterCat").value;
+  const filtered = expenses.filter(e => {
+    if (fp !== "Tous" && e.project !== fp) return false;
+    if (fc !== "Tous" && e.category !== fc) return false;
+    return true;
+  });
+
+  document.getElementById("headerSub").textContent = `${expenses.length} entrée${expenses.length !== 1 ? "s" : ""}`;
+  document.getElementById("filterCount").textContent = `${filtered.length} résultat${filtered.length !== 1 ? "s" : ""}`;
+
+  // Totaux
+  const totDiv = document.getElementById("totals");
+  totDiv.innerHTML = PROJECTS.map(p => {
+    const t = expenses.filter(e => e.project === p && e.currency === "EUR").reduce((s, e) => s + e.amount, 0);
+    return `<div class="total-card"><div class="total-label">${p}</div><div class="total-amount">${fmt(t, "EUR")}</div></div>`;
+  }).join("") + (() => {
+    const t = expenses.filter(e => e.currency === "EUR").reduce((s, e) => s + e.amount, 0);
+    return `<div class="total-card grand"><div class="total-label">Total</div><div class="total-amount">${fmt(t, "EUR")}</div></div>`;
+  })();
+
+  // Liste
+  const listDiv = document.getElementById("list");
+  if (filtered.length === 0) {
+    listDiv.innerHTML = `<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Aucune dépense</div><div class="empty-sub">Ajoutez manuellement ou importez une facture</div></div>`;
+    return;
+  }
+  listDiv.innerHTML = `<div class="list">${filtered.map(e => {
+    const cat = CATS[e.category] || { label: e.category, icon: "📦" };
+    return `<div class="item">
+      <div class="item-icon">${cat.icon}</div>
+      <div class="item-main">
+        <div class="item-desc">${e.description}${e.recurring ? '<span class="recurring-badge">↻</span>' : ""}</div>
+        <div class="item-meta">${fmtDate(e.date)} · ${e.project} · ${cat.label}</div>
+      </div>
+      <div class="item-amount">${fmt(e.amount, e.currency)}</div>
+      <div class="item-actions">
+        <button class="btn-icon" onclick="editExpense(${e.id})">✏️</button>
+        <button class="btn-icon" onclick="deleteExpense(${e.id})">🗑</button>
+      </div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+// Import facture via Claude API
+document.getElementById("fileInput").addEventListener("change", async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById("overlay").style.display = "flex";
+  document.getElementById("btnInvoice").disabled = true;
+  document.getElementById("errorBanner").style.display = "none";
+  try {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(",")[1]);
+      r.onerror = () => rej();
+      r.readAsDataURL(file);
+    });
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: file.type || "image/png", data: base64 } },
+            { type: "text", text: `Analyse cette facture. Réponds UNIQUEMENT en JSON valide sans texte ni backticks :
+{"description":"nom du service facturé court","amount":"montant numérique sans symbole","currency":"EUR ou GBP ou USD","date":"YYYY-MM-DD","category":"hosting ou domain ou tools ou api ou design ou dev ou marketing ou other"}` }
+          ]
+        }]
+      })
+    });
+    const data = await resp.json();
+    const text = data.content?.[0]?.text || "";
+    const result = JSON.parse(text.replace(/```json|```/g, "").trim());
+    document.getElementById("fDesc").value = result.description || "";
+    document.getElementById("fAmount").value = result.amount || "";
+    if (["EUR","GBP","USD"].includes(result.currency)) document.getElementById("fCurrency").value = result.currency;
+    if (result.date) document.getElementById("fDate").value = result.date;
+    if (CATS[result.category]) document.getElementById("fCategory").value = result.category;
+    document.getElementById("formCard").style.display = "block";
+    document.getElementById("btnAdd").textContent = "✕";
+    document.getElementById("btnSubmit").textContent = "Ajouter";
+    editId = null;
+  } catch {
+    document.getElementById("errorBanner").textContent = "Impossible d'analyser la facture. Vérifiez l'image et réessayez.";
+    document.getElementById("errorBanner").style.display = "block";
+  }
+  document.getElementById("overlay").style.display = "none";
+  document.getElementById("btnInvoice").disabled = false;
+  e.target.value = "";
+});
+
+render();
+</script>
+</body>
+</html>
