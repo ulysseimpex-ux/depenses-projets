@@ -69,6 +69,11 @@
     </div>
   </div>
 
+  <div id="dropZone" style="border:2px dashed #2a4a35;border-radius:12px;padding:20px;text-align:center;color:#3effa0;font-size:13px;margin-bottom:16px;cursor:pointer;transition:background 0.2s;">
+    🖼️ Glissez-déposez une capture ou un PDF de facture ici
+    <div style="font-size:11px;color:#555;margin-top:4px;">ou cliquez sur "Importer facture" — la facture n'est jamais stockée</div>
+  </div>
+
   <div id="errorBanner" class="banner banner-error" style="display:none"></div>
   <div id="infoBanner" class="banner banner-info" style="display:none"></div>
 
@@ -355,6 +360,23 @@ document.getElementById("fileInput").addEventListener("change", async function(e
   document.getElementById("overlay").style.display = "none";
   document.getElementById("btnInvoice").disabled = false;
   e.target.value = "";
+});
+
+// Drag and drop
+const dz = document.getElementById("dropZone");
+dz.addEventListener("click", () => document.getElementById("fileInput").click());
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.style.background = "#1a2a1f"; });
+dz.addEventListener("dragleave", () => dz.style.background = "");
+dz.addEventListener("drop", async e => {
+  e.preventDefault();
+  dz.style.background = "";
+  const file = e.dataTransfer.files[0];
+  if (file && (file.type.startsWith("image/") || file.type === "application/pdf")) {
+    await analyzeFile(file);
+  } else {
+    document.getElementById("errorBanner").textContent = "Veuillez déposer une image ou un PDF.";
+    document.getElementById("errorBanner").style.display = "block";
+  }
 });
 
 render();
