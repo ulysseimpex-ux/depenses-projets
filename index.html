@@ -15,6 +15,9 @@
   .btn-add { background: #3effa0; color: #0f1117; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
   .btn-invoice { background: transparent; color: #3effa0; border: 1px solid #3effa0; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
   .btn-invoice:disabled { opacity: 0.5; cursor: default; }
+  .drop-zone { border: 2px dashed #2a4a35; border-radius: 12px; padding: 20px; text-align: center; color: #3effa0; font-size: 13px; margin-bottom: 16px; cursor: pointer; transition: background 0.2s; }
+  .drop-zone.drag-over { background: #1a2a1f; border-color: #3effa0; }
+  .drop-zone-sub { font-size: 11px; color: #555; margin-top: 4px; }
   .totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
   .total-card { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 10px; padding: 12px 14px; }
   .total-card.grand { background: #1a2a1f; border-color: #2a4a35; }
@@ -67,6 +70,11 @@
       <button class="btn-invoice" id="btnInvoice" onclick="document.getElementById('fileInput').click()">📄 Importer facture</button>
       <button class="btn-add" id="btnAdd" onclick="toggleForm()">+ Ajouter</button>
     </div>
+  </div>
+
+  <div id="dropZone" class="drop-zone">
+    🖼️ Glissez-déposez une capture de facture ici
+    <div class="drop-zone-sub">ou cliquez sur "Importer facture" — la facture n'est jamais stockée</div>
   </div>
 
   <div id="errorBanner" class="banner banner-error" style="display:none"></div>
@@ -148,213 +156,159 @@
 </div>
 
 <div class="analyzing-overlay" id="overlay" style="display:none">
-  <div class="analyzing-box">⏳ Analyse de la facture en cours…</div>
+  <div class="analyzing-box">⏳ Analyse de la facture en cours…<br><small style="color:#555;font-size:11px;margin-top:8px;display:block">La facture n'est pas stockée</small></div>
 </div>
 
 <script>
 const CATS = {
-  hosting: { label: "Hébergement", icon: "⚡" },
-  domain: { label: "Nom de domaine", icon: "🌐" },
-  tools: { label: "Outils & SaaS", icon: "🔧" },
-  api: { label: "APIs & IA", icon: "🤖" },
-  design: { label: "Design & Assets", icon: "🎨" },
-  dev: { label: "Développement", icon: "💻" },
-  marketing: { label: "Marketing", icon: "📢" },
-  other: { label: "Autre", icon: "📦" },
+  hosting:{label:"Hébergement",icon:"⚡"},domain:{label:"Nom de domaine",icon:"🌐"},
+  tools:{label:"Outils & SaaS",icon:"🔧"},api:{label:"APIs & IA",icon:"🤖"},
+  design:{label:"Design & Assets",icon:"🎨"},dev:{label:"Développement",icon:"💻"},
+  marketing:{label:"Marketing",icon:"📢"},other:{label:"Autre",icon:"📦"},
 };
-const PROJECTS = ["Léa", "Autre projet", "Général"];
-const SYM = { EUR: "€", GBP: "£", USD: "$" };
+const PROJECTS=["Léa","Autre projet","Général"];
+const SYM={EUR:"€",GBP:"£",USD:"$"};
 
-let expenses = JSON.parse(localStorage.getItem("depenses-v2") || "[]");
-let editId = null;
+let expenses=JSON.parse(localStorage.getItem("depenses-v2")||"[]");
+let editId=null;
 
-function save() {
-  localStorage.setItem("depenses-v2", JSON.stringify(expenses));
+function save(){localStorage.setItem("depenses-v2",JSON.stringify(expenses));}
+function fmt(a,c){return`${SYM[c]||c}${parseFloat(a).toFixed(2)}`;}
+function fmtDate(d){return new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"});}
+function today(){return new Date().toISOString().split("T")[0];}
+
+function resetForm(){
+  document.getElementById("fDate").value=today();
+  document.getElementById("fProject").value="Léa";
+  document.getElementById("fCategory").value="hosting";
+  document.getElementById("fCurrency").value="EUR";
+  document.getElementById("fDesc").value="";
+  document.getElementById("fAmount").value="";
+  document.getElementById("fRecurring").checked=false;
+  document.getElementById("btnSubmit").textContent="Ajouter";
+  editId=null;
 }
 
-function fmt(amount, cur) {
-  return `${SYM[cur] || cur}${parseFloat(amount).toFixed(2)}`;
+function toggleForm(){
+  const c=document.getElementById("formCard");
+  if(c.style.display==="none"){resetForm();c.style.display="block";document.getElementById("btnAdd").textContent="✕";}
+  else{closeForm();}
 }
 
-function fmtDate(d) {
-  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+function closeForm(){
+  document.getElementById("formCard").style.display="none";
+  document.getElementById("btnAdd").textContent="+ Ajouter";
+  editId=null;
 }
 
-function today() {
-  return new Date().toISOString().split("T")[0];
-}
-
-function resetForm() {
-  document.getElementById("fDate").value = today();
-  document.getElementById("fProject").value = "Léa";
-  document.getElementById("fCategory").value = "hosting";
-  document.getElementById("fCurrency").value = "EUR";
-  document.getElementById("fDesc").value = "";
-  document.getElementById("fAmount").value = "";
-  document.getElementById("fRecurring").checked = false;
-  document.getElementById("btnSubmit").textContent = "Ajouter";
-  editId = null;
-}
-
-function toggleForm() {
-  const c = document.getElementById("formCard");
-  if (c.style.display === "none") {
-    resetForm();
-    c.style.display = "block";
-    document.getElementById("btnAdd").textContent = "✕";
-  } else {
-    closeForm();
-  }
-}
-
-function closeForm() {
-  document.getElementById("formCard").style.display = "none";
-  document.getElementById("btnAdd").textContent = "+ Ajouter";
-  editId = null;
-}
-
-function submitForm() {
-  const desc = document.getElementById("fDesc").value.trim();
-  const amount = parseFloat(document.getElementById("fAmount").value);
-  if (!desc || isNaN(amount)) return;
-  const entry = {
-    id: editId || Date.now(),
-    date: document.getElementById("fDate").value,
-    project: document.getElementById("fProject").value,
-    category: document.getElementById("fCategory").value,
-    currency: document.getElementById("fCurrency").value,
-    description: desc,
-    amount,
-    recurring: document.getElementById("fRecurring").checked,
+function submitForm(){
+  const desc=document.getElementById("fDesc").value.trim();
+  const amount=parseFloat(document.getElementById("fAmount").value);
+  if(!desc||isNaN(amount))return;
+  const entry={
+    id:editId||Date.now(),
+    date:document.getElementById("fDate").value,
+    project:document.getElementById("fProject").value,
+    category:document.getElementById("fCategory").value,
+    currency:document.getElementById("fCurrency").value,
+    description:desc,amount,
+    recurring:document.getElementById("fRecurring").checked,
   };
-  if (editId) {
-    expenses = expenses.map(e => e.id === editId ? entry : e);
-  } else {
-    expenses.unshift(entry);
-  }
-  save();
-  closeForm();
-  render();
+  if(editId){expenses=expenses.map(e=>e.id===editId?entry:e);}
+  else{expenses.unshift(entry);}
+  save();closeForm();render();
 }
 
-function editExpense(id) {
-  const e = expenses.find(x => x.id === id);
-  if (!e) return;
-  editId = id;
-  document.getElementById("fDate").value = e.date;
-  document.getElementById("fProject").value = e.project;
-  document.getElementById("fCategory").value = e.category;
-  document.getElementById("fCurrency").value = e.currency;
-  document.getElementById("fDesc").value = e.description;
-  document.getElementById("fAmount").value = e.amount;
-  document.getElementById("fRecurring").checked = e.recurring;
-  document.getElementById("btnSubmit").textContent = "Modifier";
-  document.getElementById("formCard").style.display = "block";
-  document.getElementById("btnAdd").textContent = "✕";
-  window.scrollTo(0, 0);
+function editExpense(id){
+  const e=expenses.find(x=>x.id===id);if(!e)return;
+  editId=id;
+  document.getElementById("fDate").value=e.date;
+  document.getElementById("fProject").value=e.project;
+  document.getElementById("fCategory").value=e.category;
+  document.getElementById("fCurrency").value=e.currency;
+  document.getElementById("fDesc").value=e.description;
+  document.getElementById("fAmount").value=e.amount;
+  document.getElementById("fRecurring").checked=e.recurring;
+  document.getElementById("btnSubmit").textContent="Modifier";
+  document.getElementById("formCard").style.display="block";
+  document.getElementById("btnAdd").textContent="✕";
+  window.scrollTo(0,0);
 }
 
-function deleteExpense(id) {
-  if (!confirm("Supprimer cette dépense ?")) return;
-  expenses = expenses.filter(e => e.id !== id);
-  save();
-  render();
+function deleteExpense(id){
+  if(!confirm("Supprimer cette dépense ?"))return;
+  expenses=expenses.filter(e=>e.id!==id);save();render();
 }
 
-function render() {
-  const fp = document.getElementById("filterProject").value;
-  const fc = document.getElementById("filterCat").value;
-  const filtered = expenses.filter(e => {
-    if (fp !== "Tous" && e.project !== fp) return false;
-    if (fc !== "Tous" && e.category !== fc) return false;
+function render(){
+  const fp=document.getElementById("filterProject").value;
+  const fc=document.getElementById("filterCat").value;
+  const filtered=expenses.filter(e=>{
+    if(fp!=="Tous"&&e.project!==fp)return false;
+    if(fc!=="Tous"&&e.category!==fc)return false;
     return true;
   });
-
-  document.getElementById("headerSub").textContent = `${expenses.length} entrée${expenses.length !== 1 ? "s" : ""}`;
-  document.getElementById("filterCount").textContent = `${filtered.length} résultat${filtered.length !== 1 ? "s" : ""}`;
-
-  // Totaux
-  const totDiv = document.getElementById("totals");
-  totDiv.innerHTML = PROJECTS.map(p => {
-    const t = expenses.filter(e => e.project === p && e.currency === "EUR").reduce((s, e) => s + e.amount, 0);
-    return `<div class="total-card"><div class="total-label">${p}</div><div class="total-amount">${fmt(t, "EUR")}</div></div>`;
-  }).join("") + (() => {
-    const t = expenses.filter(e => e.currency === "EUR").reduce((s, e) => s + e.amount, 0);
-    return `<div class="total-card grand"><div class="total-label">Total</div><div class="total-amount">${fmt(t, "EUR")}</div></div>`;
-  })();
-
-  // Liste
-  const listDiv = document.getElementById("list");
-  if (filtered.length === 0) {
-    listDiv.innerHTML = `<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Aucune dépense</div><div class="empty-sub">Ajoutez manuellement ou importez une facture</div></div>`;
-    return;
-  }
-  listDiv.innerHTML = `<div class="list">${filtered.map(e => {
-    const cat = CATS[e.category] || { label: e.category, icon: "📦" };
-    return `<div class="item">
-      <div class="item-icon">${cat.icon}</div>
-      <div class="item-main">
-        <div class="item-desc">${e.description}${e.recurring ? '<span class="recurring-badge">↻</span>' : ""}</div>
-        <div class="item-meta">${fmtDate(e.date)} · ${e.project} · ${cat.label}</div>
-      </div>
-      <div class="item-amount">${fmt(e.amount, e.currency)}</div>
-      <div class="item-actions">
-        <button class="btn-icon" onclick="editExpense(${e.id})">✏️</button>
-        <button class="btn-icon" onclick="deleteExpense(${e.id})">🗑</button>
-      </div>
-    </div>`;
+  document.getElementById("headerSub").textContent=`${expenses.length} entrée${expenses.length!==1?"s":""}`;
+  document.getElementById("filterCount").textContent=`${filtered.length} résultat${filtered.length!==1?"s":""}`;
+  document.getElementById("totals").innerHTML=PROJECTS.map(p=>{
+    const t=expenses.filter(e=>e.project===p&&e.currency==="EUR").reduce((s,e)=>s+e.amount,0);
+    return`<div class="total-card"><div class="total-label">${p}</div><div class="total-amount">${fmt(t,"EUR")}</div></div>`;
+  }).join("")+`<div class="total-card grand"><div class="total-label">Total</div><div class="total-amount">${fmt(expenses.filter(e=>e.currency==="EUR").reduce((s,e)=>s+e.amount,0),"EUR")}</div></div>`;
+  const listDiv=document.getElementById("list");
+  if(filtered.length===0){listDiv.innerHTML=`<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Aucune dépense</div><div class="empty-sub">Ajoutez manuellement ou glissez une facture</div></div>`;return;}
+  listDiv.innerHTML=`<div class="list">${filtered.map(e=>{
+    const cat=CATS[e.category]||{label:e.category,icon:"📦"};
+    return`<div class="item"><div class="item-icon">${cat.icon}</div><div class="item-main"><div class="item-desc">${e.description}${e.recurring?'<span class="recurring-badge">↻</span>':""}</div><div class="item-meta">${fmtDate(e.date)} · ${e.project} · ${cat.label}</div></div><div class="item-amount">${fmt(e.amount,e.currency)}</div><div class="item-actions"><button class="btn-icon" onclick="editExpense(${e.id})">✏️</button><button class="btn-icon" onclick="deleteExpense(${e.id})">🗑</button></div></div>`;
   }).join("")}</div>`;
 }
 
-// Import facture via Claude API
-document.getElementById("fileInput").addEventListener("change", async function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  document.getElementById("overlay").style.display = "flex";
-  document.getElementById("btnInvoice").disabled = true;
-  document.getElementById("errorBanner").style.display = "none";
-  try {
-    const base64 = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(r.result.split(",")[1]);
-      r.onerror = () => rej();
-      r.readAsDataURL(file);
+async function analyzeFile(file){
+  document.getElementById("overlay").style.display="flex";
+  document.getElementById("btnInvoice").disabled=true;
+  document.getElementById("errorBanner").style.display="none";
+  try{
+    const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=()=>rej();r.readAsDataURL(file);});
+    const resp=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:[
+        {type:"image",source:{type:"base64",media_type:file.type||"image/png",data:base64}},
+        {type:"text",text:`Analyse cette facture. Réponds UNIQUEMENT en JSON valide sans texte ni backticks :
+{"description":"nom du service facturé court","amount":"montant numérique sans symbole","currency":"EUR ou GBP ou USD","date":"YYYY-MM-DD","category":"hosting ou domain ou tools ou api ou design ou dev ou marketing ou other"}`}
+      ]}]})
     });
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: file.type || "image/png", data: base64 } },
-            { type: "text", text: `Analyse cette facture. Réponds UNIQUEMENT en JSON valide sans texte ni backticks :
-{"description":"nom du service facturé court","amount":"montant numérique sans symbole","currency":"EUR ou GBP ou USD","date":"YYYY-MM-DD","category":"hosting ou domain ou tools ou api ou design ou dev ou marketing ou other"}` }
-          ]
-        }]
-      })
-    });
-    const data = await resp.json();
-    const text = data.content?.[0]?.text || "";
-    const result = JSON.parse(text.replace(/```json|```/g, "").trim());
-    document.getElementById("fDesc").value = result.description || "";
-    document.getElementById("fAmount").value = result.amount || "";
-    if (["EUR","GBP","USD"].includes(result.currency)) document.getElementById("fCurrency").value = result.currency;
-    if (result.date) document.getElementById("fDate").value = result.date;
-    if (CATS[result.category]) document.getElementById("fCategory").value = result.category;
-    document.getElementById("formCard").style.display = "block";
-    document.getElementById("btnAdd").textContent = "✕";
-    document.getElementById("btnSubmit").textContent = "Ajouter";
-    editId = null;
-  } catch {
-    document.getElementById("errorBanner").textContent = "Impossible d'analyser la facture. Vérifiez l'image et réessayez.";
-    document.getElementById("errorBanner").style.display = "block";
+    const data=await resp.json();
+    const result=JSON.parse((data.content?.[0]?.text||"").replace(/```json|```/g,"").trim());
+    document.getElementById("fDesc").value=result.description||"";
+    document.getElementById("fAmount").value=result.amount||"";
+    if(["EUR","GBP","USD"].includes(result.currency))document.getElementById("fCurrency").value=result.currency;
+    if(result.date)document.getElementById("fDate").value=result.date;
+    if(CATS[result.category])document.getElementById("fCategory").value=result.category;
+    document.getElementById("formCard").style.display="block";
+    document.getElementById("btnAdd").textContent="✕";
+    document.getElementById("btnSubmit").textContent="Ajouter";
+    editId=null;
+  }catch{
+    document.getElementById("errorBanner").textContent="Impossible d'analyser la facture. Vérifiez l'image et réessayez.";
+    document.getElementById("errorBanner").style.display="block";
   }
-  document.getElementById("overlay").style.display = "none";
-  document.getElementById("btnInvoice").disabled = false;
-  e.target.value = "";
+  document.getElementById("overlay").style.display="none";
+  document.getElementById("btnInvoice").disabled=false;
+}
+
+document.getElementById("fileInput").addEventListener("change",async function(e){
+  const file=e.target.files[0];if(!file)return;
+  await analyzeFile(file);e.target.value="";
+});
+
+const dz=document.getElementById("dropZone");
+dz.addEventListener("click",()=>document.getElementById("fileInput").click());
+dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("drag-over");});
+dz.addEventListener("dragleave",()=>dz.classList.remove("drag-over"));
+dz.addEventListener("drop",async e=>{
+  e.preventDefault();dz.classList.remove("drag-over");
+  const file=e.dataTransfer.files[0];
+  if(file&&file.type.startsWith("image/"))await analyzeFile(file);
+  else{document.getElementById("errorBanner").textContent="Veuillez déposer une image.";document.getElementById("errorBanner").style.display="block";}
 });
 
 render();
